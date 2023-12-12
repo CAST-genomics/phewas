@@ -45,6 +45,7 @@ def main():
 	parser.add_argument("--name", help="Name of locus", type=str, required=True)
 	parser.add_argument("--window", help="Window size (bp)", type=int, default=50000)
 	parser.add_argument("--manifest", help="Path to manifest file", type=str, default="panukb-manifest.csv")
+	parser.add_argument("--startpt", help="Location of starting phenotype to process (for starting in the middle of the file)", type=int, default=0)
 	parser.add_argument("--numpts", help="Number of phenotypes to process (for debugging)", type=int, default=-1)
 	parser.add_argument("--outdir", help="Output directory to store results", type=str, required=True)
 	args = parser.parse_args()
@@ -64,18 +65,15 @@ def main():
 		os.mkdir(out_dir)
 
 	###### Process each phenotype one at a time #####
-	numpts = 0
+	numpts = args.startpt
 	traitinfo_path_list = []
-	for index, row in manifest.iterrows():
+	for index, row in manifest.iloc[args.startpt:].iterrows():
 		trait = row['phenocode']
 		MSG("Processing {}".format(trait))
 		outfile = os.path.join(out_dir, "{}_{}.tab".format(trait, chrom_name))
 		newoutfile = os.path.join(out_dir, "{}_{}_withinfo.tab".format(trait, chrom_name))
 		# Download header line and tabix index
 		RunCmd("wget -O - {} | zcat | head -n 1 > {}".format(row['aws_link'], outfile))
-		# TODO - download these to somewhere else. also, check if already exists
-		# before downloading (optional)
-		RunCmd("wget {}".format(row['aws_link_tabix']))
 		# Extract tabix info to a file
 		RunCmd("tabix {} {} >> {}".format(row['aws_link'], chrom_range, outfile))
 		# Add column with trait code
@@ -83,7 +81,7 @@ def main():
 		traitinfo_path_list.append(newoutfile)
 		# Done processing phenotype. Increment counter
 		numpts += 1
-		if numpts >= args.numpts and args.numpts > 0: break
+		if numpts >= (args.startpt + args.numpts) and args.numpts > 0: break
 
 	###### Combine data from all phenotypes #######
 	final_out_file = os.path.join(args.outdir, "{}_phewas.tab".format(chrom_name))
